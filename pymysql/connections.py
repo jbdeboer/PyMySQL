@@ -1037,7 +1037,13 @@ class Connection(object):
         try:
             self._sock.sendall(data)
         except IOError as e:
+            # Read the last packet on the wire, which may trigger
+            # a packet.check_error() which prints any errors sent
+            # the server.
+            self._read_packet()
+
             self._force_close()
+
             raise err.OperationalError(
                 CR.CR_SERVER_GONE_ERROR,
                 "MySQL server has gone away (%r)" % (e,))
@@ -1088,9 +1094,9 @@ class Connection(object):
         # calling self..write_packet()
         prelude = struct.pack('<iB', packet_size, command)
         packet = prelude + sql[:packet_size-1]
+        self._next_seq_id = 1
         self._write_bytes(packet)
         if DEBUG: dump_packet(packet)
-        self._next_seq_id = 1
 
         if packet_size < MAX_PACKET_LEN:
             return
